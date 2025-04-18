@@ -1,0 +1,1056 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Бот в Лабиринте | API Управляемая Симуляция</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Roboto:wght@300;400;700&display=swap');
+        @import url("https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css");
+
+        :root {
+            --bg-color: #1a1a2e;
+            --panel-bg: rgba(28, 28, 65, 0.88);
+            --panel-border: rgba(120, 120, 180, 0.4);
+            --text-color: #e8e8ff;
+            --text-muted: #a0a0cc;
+            --accent-color: #c0c0ff;
+            --accent-gradient-start: #6a6aac;
+            --accent-gradient-end: #5a5aa8;
+            --accent-gradient-hover-start: #7a7abc;
+            --accent-gradient-hover-end: #6a6aa8;
+            --accent-gradient-active-start: #5a5a88;
+            --accent-gradient-active-end: #4a4a77;
+            --button-shadow: rgba(0, 0, 0, 0.3);
+            --button-border: #4a4a77;
+            --status-init: #87CEFA;
+            --status-nav: #98FB98;
+            --status-solved: #FFD700;
+            --status-error: #FF6347;
+            --api-idle: var(--text-muted);
+            --api-request: #FFC107;
+            --api-received: #AFEEEE;
+            --api-error: #FFA07A;
+            --debug-border: #6c5ce7;
+            --debug-text: #cccccc;
+            --debug-label: #a29bfe;
+        }
+
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Roboto', sans-serif;
+            font-size: 16px;
+            line-height: 1.5;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        .hud-panel {
+            position: absolute;
+            background-color: var(--panel-bg);
+            padding: 25px;
+            border-radius: 15px;
+            z-index: 10;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+            border: 1px solid var(--panel-border);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            transition: background-color 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        #info {
+            top: 20px;
+            left: 20px;
+            width: 300px;
+        }
+
+        #info h2 {
+            font-family: 'Orbitron', sans-serif;
+            margin: 0 0 20px 0;
+            padding-bottom: 12px;
+            font-size: 1.5em;
+            color: var(--accent-color);
+            border-bottom: 2px solid var(--panel-border);
+            text-align: center;
+            letter-spacing: 1.5px;
+            text-shadow: 0 0 5px rgba(192, 192, 255, 0.3);
+        }
+
+        #info .status-label {
+            font-size: 0.95em;
+            color: var(--text-muted);
+            margin-bottom: 5px;
+            display: block;
+            font-weight: 400;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        #info .status-label::before {
+            font-family: "Font Awesome 6 Free";
+            font-weight: 900;
+            margin-right: 8px;
+            color: var(--accent-color);
+            opacity: 0.7;
+        }
+
+        #info .status-label[for="status"]::before {
+            content: "\f085";
+        }
+
+        #info .status-label[for="api-status"]::before {
+            content: "\f3c2";
+        }
+
+        #status,
+        #api-status {
+            margin-bottom: 20px;
+            font-weight: bold;
+            font-size: 1.1em;
+            min-height: 1.5em;
+            line-height: 1.5em;
+            text-align: center;
+            padding: 8px 12px;
+            border-radius: 8px;
+            background-color: rgba(0, 0, 0, 0.25);
+            transition: all 0.4s ease;
+            border: 1px solid transparent;
+            box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.3);
+        }
+
+        #status.initializing {
+            color: var(--status-init);
+            border-color: var(--status-init);
+            background-color: rgba(135, 206, 250, 0.1);
+        }
+
+        #status.navigating {
+            color: var(--status-nav);
+            border-color: var(--status-nav);
+            background-color: rgba(152, 251, 152, 0.1);
+        }
+
+        #status.solved {
+            color: var(--status-solved);
+            border-color: var(--status-solved);
+            background-color: rgba(255, 215, 0, 0.15);
+        }
+
+        #status.error {
+            color: var(--status-error);
+            border-color: var(--status-error);
+            background-color: rgba(255, 99, 71, 0.15);
+        }
+
+        #api-status.idle {
+            color: var(--api-idle);
+            border-color: rgba(160, 160, 204, 0.3);
+        }
+
+        #api-status.requesting {
+            color: var(--api-request);
+            border-color: var(--api-request);
+            background-color: rgba(255, 193, 7, 0.1);
+        }
+
+        #api-status.received {
+            color: var(--api-received);
+            border-color: var(--api-received);
+            background-color: rgba(175, 238, 238, 0.1);
+        }
+
+        #api-status.error {
+            color: var(--api-error);
+            border-color: var(--api-error);
+            background-color: rgba(255, 160, 122, 0.15);
+        }
+
+
+        #reset-button {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            width: 100%;
+            background: linear-gradient(145deg, var(--accent-gradient-start), var(--accent-gradient-end));
+            color: #ffffff;
+            border: none;
+            padding: 14px 18px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 1.1em;
+            font-family: 'Orbitron', sans-serif;
+            letter-spacing: 1px;
+            transition: all 0.25s ease;
+            box-shadow: 0 4px 8px var(--button-shadow);
+            border-bottom: 3px solid var(--button-border);
+            text-transform: uppercase;
+        }
+
+        #reset-button::before {
+            font-family: "Font Awesome 6 Free";
+            font-weight: 900;
+            content: "\f021";
+        }
+
+        #reset-button:hover {
+            background: linear-gradient(145deg, var(--accent-gradient-hover-start), var(--accent-gradient-hover-end));
+            box-shadow: 0 6px 12px var(--button-shadow);
+            transform: translateY(-2px);
+        }
+
+        #reset-button:active {
+            background: linear-gradient(145deg, var(--accent-gradient-active-start), var(--accent-gradient-active-end));
+            box-shadow: 0 2px 5px var(--button-shadow);
+            transform: translateY(1px);
+            border-bottom-width: 2px;
+        }
+
+        #debug-info {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background-color: rgba(10, 10, 20, 0.85);
+            padding: 15px 20px;
+            border-radius: 10px;
+            font-size: 0.9em;
+            z-index: 10;
+            min-width: 320px;
+            font-family: 'Courier New', Courier, monospace;
+            color: var(--debug-text);
+            border-top: 3px solid var(--debug-border);
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+        }
+
+        #debug-info strong {
+            color: var(--debug-label);
+            font-weight: bold;
+        }
+
+        #debug-info .separator {
+            color: var(--text-muted);
+            margin: 0 8px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="info" class="hud-panel">
+        <h2>УПРАВЛЕНИЕ РОБОТОМ</h2>
+
+        <span class="status-label" for="status">Статус Системы:</span>
+        <div id="status" class="initializing">Инициализация...</div>
+
+        <span class="status-label" for="api-status">Связь с API:</span>
+        <div id="api-status" class="idle">API: Ожидание</div>
+
+        <button id="reset-button">Новый Лабиринт</button>
+    </div>
+
+    <div id="debug-info">
+        <span><strong>Датчики:</strong> Ф: Н/Д<span class="separator">|</span>Л: Н/Д<span class="separator">|</span>П:
+            Н/Д</span>
+        <br>
+        <span><strong>Действие:</strong> <span id="action-value">Нет</span></span>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.161.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.161.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        let actionValueElement;
+        const translations = {
+            statusInitializing: "Инициализация...",
+            statusNavigating: "Прохождение лабиринта...",
+            statusSolved: "Лабиринт пройден!",
+            statusError: "Ошибка системы!",
+            apiIdle: "API: Ожидание",
+            apiRequesting: "API: Запрос...",
+            apiReceived: "API: Получено ",
+            apiError: "API Ошибка: ",
+            apiComplete: "API: Задача выполнена",
+            debugSensorsLabel: "Датчики:",
+            debugActionLabel: "Действие:",
+            debugSensorPrefixF: "Ф:",
+            debugSensorPrefixL: "Л:",
+            debugSensorPrefixR: "П:",
+            debugActionNone: "Нет",
+            debugActionTurning: "Поворот",
+            debugActionWaitingAPI: "Ожидание API",
+            debugActionDeciding: "Решение...",
+            debugActionMoving: "Движение",
+            debugActionError: "Ошибка API",
+            debugNA: "Н/Д",
+            debugInfinity: "Беск.",
+            apiActionForward: "FORWARD",
+            apiActionLeft: "LEFT",
+            apiActionRight: "RIGHT",
+            uiActionForward: "ВПЕРЕД",
+            uiActionLeft: "НАЛЕВО",
+            uiActionRight: "НАПРАВО",
+        };
+        let scene, camera, renderer, robotGroup, controls;
+        const clock = new THREE.Clock();
+
+        const mazeWidth = 11;
+        const mazeHeight = 11;
+        const cellSize = 5;
+        const wallHeight = 4;
+        const wallThickness = 0.5;
+        let mazeGrid = [];
+        let mazeWallsGroup = new THREE.Group();
+        let decorationGroup = new THREE.Group();
+        let exitMarker = null;
+
+        const moveSpeed = 2.5;
+        const turnSpeed = Math.PI * 1.0;
+        let targetRotation = 0;
+        let needsRotation = false;
+        let isMoving = true;
+
+        const navigationRaycaster = new THREE.Raycaster();
+        const sensorDistance = cellSize * 1.5;
+        const collisionThreshold = cellSize * 0.3;
+        let frontSensorDist = Infinity;
+        let leftSensorDist = Infinity;
+        let rightSensorDist = Infinity;
+        let debugInfoElement;
+        let statusElement;
+        let apiStatusElement;
+
+        let needsDecision = true;
+        let isWaitingForAPI = false;
+        let lastAPIAction = null;
+        const API_CALL_INTERVAL = 5;
+        let timeSinceLastAPICall = API_CALL_INTERVAL;
+
+        let obstacles = [];
+
+        const crateMat = new THREE.MeshStandardMaterial({ color: 0x8B4513, roughness: 0.8, metalness: 0.1 });
+        const barrelMat = new THREE.MeshStandardMaterial({ color: 0x666666, metalness: 0.7, roughness: 0.4 });
+        const crystalMat = new THREE.MeshStandardMaterial({ color: 0x40E0D0, transparent: true, opacity: 0.8, roughness: 0.2, metalness: 0.3, emissive: 0x11aaaa, emissiveIntensity: 0.3 });
+        const rockMat = new THREE.MeshStandardMaterial({ color: 0x555555, roughness: 0.9, metalness: 0.0 });
+        const pipeMat = new THREE.MeshStandardMaterial({ color: 0xaaaaaa, metalness: 0.8, roughness: 0.5 });
+
+        function init() {
+            debugInfoElement = document.getElementById('debug-info');
+            statusElement = document.getElementById('status');
+            apiStatusElement = document.getElementById('api-status');
+
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x333344);
+            scene.fog = new THREE.Fog(0x333344, cellSize * mazeWidth * 0.5, cellSize * mazeWidth * 1.5);
+
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(cellSize * mazeWidth / 2, cellSize * mazeWidth * 0.9, cellSize * mazeHeight * 1.1);
+            camera.lookAt(cellSize * mazeWidth / 2, 0, cellSize * mazeHeight / 2);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            document.body.appendChild(renderer.domElement);
+
+            const ambientLight = new THREE.AmbientLight(0xcccccc, 0.7);
+            scene.add(ambientLight);
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
+            directionalLight.position.set(cellSize * mazeWidth / 3, 50, cellSize * mazeHeight / 3);
+            directionalLight.target.position.set(cellSize * mazeWidth / 2, 0, cellSize * mazeHeight / 2);
+            directionalLight.castShadow = true;
+            directionalLight.shadow.mapSize.width = 2048;
+            directionalLight.shadow.mapSize.height = 2048;
+            const shadowCamSize = Math.max(mazeWidth, mazeHeight) * cellSize * 0.7;
+            directionalLight.shadow.camera.near = 10;
+            directionalLight.shadow.camera.far = 100;
+            directionalLight.shadow.camera.left = -shadowCamSize;
+            directionalLight.shadow.camera.right = shadowCamSize;
+            directionalLight.shadow.camera.top = shadowCamSize;
+            directionalLight.shadow.camera.bottom = -shadowCamSize;
+            scene.add(directionalLight);
+            scene.add(directionalLight.target);
+
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.screenSpacePanning = false;
+            controls.maxPolarAngle = Math.PI / 2 - 0.05;
+            controls.target.set(cellSize * mazeWidth / 2, 0, cellSize * mazeHeight / 2);
+            controls.minDistance = cellSize * 2;
+            controls.maxDistance = cellSize * mazeWidth * 1.5;
+
+            const groundGeo = new THREE.PlaneGeometry(cellSize * mazeWidth, cellSize * mazeHeight);
+            const groundMat = new THREE.MeshStandardMaterial({ color: 0x556655, roughness: 0.9, metalness: 0.1 });
+            const ground = new THREE.Mesh(groundGeo, groundMat);
+            ground.rotation.x = -Math.PI / 2;
+            ground.position.set(cellSize * mazeWidth / 2 - cellSize / 2, 0, cellSize * mazeHeight / 2 - cellSize / 2);
+            ground.receiveShadow = true;
+            scene.add(ground);
+
+            robotGroup = createBeautifulRobot();
+            const robotScale = cellSize * 0.08;
+            robotGroup.scale.set(robotScale, robotScale, robotScale);
+
+            scene.add(robotGroup);
+
+            scene.add(decorationGroup);
+
+            setupNewMaze();
+
+            window.addEventListener('resize', onWindowResize, false);
+            document.getElementById('reset-button').addEventListener('click', setupNewMaze);
+
+            animate();
+        }
+
+        function generateMaze(width, height) {
+            let grid = Array(height).fill(null).map(() => Array(width).fill(null).map(() => ({
+                visited: false,
+                walls: { N: true, S: true, E: true, W: true }
+            })));
+
+            let stack = [];
+            let currentX = 0;
+            let currentY = 0;
+            grid[currentY][currentX].visited = true;
+            let visitedCells = 1;
+            const totalCells = width * height;
+
+            function getNeighbors(x, y) {
+                const neighbors = [];
+                if (y > 0 && !grid[y - 1][x].visited) neighbors.push({ x: x, y: y - 1, dir: 'N' });
+                if (y < height - 1 && !grid[y + 1][x].visited) neighbors.push({ x: x, y: y + 1, dir: 'S' });
+                if (x < width - 1 && !grid[y][x + 1].visited) neighbors.push({ x: x + 1, y: y, dir: 'E' });
+                if (x > 0 && !grid[y][x - 1].visited) neighbors.push({ x: x - 1, y: y, dir: 'W' });
+                return neighbors;
+            }
+
+            while (visitedCells < totalCells) {
+                const neighbors = getNeighbors(currentX, currentY);
+
+                if (neighbors.length > 0) {
+                    const next = neighbors[Math.floor(Math.random() * neighbors.length)];
+
+                    if (next.dir === 'N') { grid[currentY][currentX].walls.N = false; grid[next.y][next.x].walls.S = false; }
+                    if (next.dir === 'S') { grid[currentY][currentX].walls.S = false; grid[next.y][next.x].walls.N = false; }
+                    if (next.dir === 'E') { grid[currentY][currentX].walls.E = false; grid[next.y][next.x].walls.W = false; }
+                    if (next.dir === 'W') { grid[currentY][currentX].walls.W = false; grid[next.y][next.x].walls.E = false; }
+
+                    stack.push({ x: currentX, y: currentY });
+                    currentX = next.x;
+                    currentY = next.y;
+                    grid[currentY][currentX].visited = true;
+                    visitedCells++;
+                } else if (stack.length > 0) {
+                    const prev = stack.pop();
+                    currentX = prev.x;
+                    currentY = prev.y;
+                } else {
+                    console.error("Maze generation stuck?");
+                    break;
+                }
+            }
+            grid[0][0].walls.W = false;
+            grid[height - 1][width - 1].walls.E = false;
+
+            return grid;
+        }
+
+        function createMazeGeometry(grid, cellW, cellH, wallH, wallT) {
+            const mazeGroup = new THREE.Group();
+            obstacles = [];
+            const wallMat = new THREE.MeshStandardMaterial({ color: 0xaaaaaa, metalness: 0.4, roughness: 0.8 });
+            const exitMat = new THREE.MeshStandardMaterial({ color: 0x00ff00, emissive: 0x00aa00, roughness: 0.9, transparent: true, opacity: 0.7 }); // Make exit slightly transparent
+
+            const wallGeoHorizontal = new THREE.BoxGeometry(cellW + wallT, wallH, wallT);
+            const wallGeoVertical = new THREE.BoxGeometry(wallT, wallH, cellH + wallT);
+
+            const rows = grid.length;
+            const cols = grid[0].length;
+
+            for (let y = 0; y < rows; y++) {
+                for (let x = 0; x < cols; x++) {
+                    const cell = grid[y][x];
+                    const cellCenterX = x * cellW;
+                    const cellCenterZ = y * cellH;
+
+                    if (cell.walls.N) {
+                        const wall = new THREE.Mesh(wallGeoHorizontal, wallMat);
+                        wall.position.set(cellCenterX, wallH / 2, cellCenterZ - cellH / 2);
+                        wall.castShadow = true; wall.receiveShadow = true;
+                        mazeGroup.add(wall); obstacles.push(wall);
+                    }
+                    if (y === rows - 1 && cell.walls.S) {
+                        const wall = new THREE.Mesh(wallGeoHorizontal, wallMat);
+                        wall.position.set(cellCenterX, wallH / 2, cellCenterZ + cellH / 2);
+                        wall.castShadow = true; wall.receiveShadow = true;
+                        mazeGroup.add(wall); obstacles.push(wall);
+                    }
+                    if (cell.walls.W) {
+                        const wall = new THREE.Mesh(wallGeoVertical, wallMat);
+                        wall.position.set(cellCenterX - cellW / 2, wallH / 2, cellCenterZ);
+                        wall.castShadow = true; wall.receiveShadow = true;
+                        mazeGroup.add(wall); obstacles.push(wall);
+                    }
+                    if (x === cols - 1 && cell.walls.E) {
+                        const wall = new THREE.Mesh(wallGeoVertical, wallMat);
+                        wall.position.set(cellCenterX + cellW / 2, wallH / 2, cellCenterZ);
+                        wall.castShadow = true; wall.receiveShadow = true;
+                        mazeGroup.add(wall); obstacles.push(wall);
+                    }
+                }
+            }
+
+            const exitX = (cols - 1) * cellW;
+            const exitZ = (rows - 1) * cellH;
+            const exitMarkerGeo = new THREE.PlaneGeometry(cellW * 0.8, cellH * 0.8);
+            exitMarker = new THREE.Mesh(exitMarkerGeo, exitMat);
+            exitMarker.rotation.x = -Math.PI / 2;
+            exitMarker.position.set(exitX, 0.05, exitZ);
+            exitMarker.receiveShadow = true;
+            mazeGroup.add(exitMarker);
+
+            return mazeGroup;
+        }
+
+        function createCrate(size = 1.5) {
+            const crateGeo = new THREE.BoxGeometry(size, size, size);
+            const crate = new THREE.Mesh(crateGeo, crateMat);
+            crate.castShadow = true;
+            crate.receiveShadow = true;
+            return crate;
+        }
+
+        function createBarrel(height = 2, radius = 0.8) {
+            const barrelGeo = new THREE.CylinderGeometry(radius, radius, height, 16);
+            const barrel = new THREE.Mesh(barrelGeo, barrelMat);
+            barrel.castShadow = true;
+            barrel.receiveShadow = true;
+            barrel.userData.type = 'decoration';
+            return barrel;
+        }
+
+        function createCrystal(size = 1) {
+            const crystalGeo = new THREE.IcosahedronGeometry(size, 0);
+            const crystal = new THREE.Mesh(crystalGeo, crystalMat);
+            crystal.castShadow = true;
+            crystal.receiveShadow = true;
+            return crystal;
+        }
+
+        function createRock(size = 1.5) {
+            const detail = Math.random() < 0.5 ? 0 : 1;
+            const rockGeo = new THREE.IcosahedronGeometry(size, detail);
+            const positionAttribute = rockGeo.getAttribute('position');
+            for (let i = 0; i < positionAttribute.count; i++) {
+                const x = positionAttribute.getX(i);
+                const y = positionAttribute.getY(i);
+                const z = positionAttribute.getZ(i);
+                const warpFactor = 0.1 + Math.random() * 0.2;
+                positionAttribute.setXYZ(
+                    i,
+                    x + (Math.random() - 0.5) * warpFactor * size,
+                    y + (Math.random() - 0.5) * warpFactor * size,
+                    z + (Math.random() - 0.5) * warpFactor * size
+                );
+            }
+            rockGeo.computeVertexNormals();
+            const rock = new THREE.Mesh(rockGeo, rockMat);
+            rock.castShadow = true;
+            rock.receiveShadow = true;
+            return rock;
+        }
+
+        function createPipeSegment(length = 2, radius = 0.3) {
+            const pipeGeo = new THREE.CylinderGeometry(radius, radius, length, 12);
+            const pipe = new THREE.Mesh(pipeGeo, pipeMat);
+            pipe.castShadow = true;
+            pipe.receiveShadow = true;
+            return pipe;
+        }
+
+        function addDecorations(grid, cellW, cellH) {
+            while (decorationGroup.children.length > 0) {
+                decorationGroup.remove(decorationGroup.children[0]);
+            }
+
+            const rows = grid.length;
+            const cols = grid[0].length;
+            const decorationProbability = 0.15;
+
+            for (let y = 0; y < rows; y++) {
+                for (let x = 0; x < cols; x++) {
+                    if ((x === 0 && y === 0) || (x === cols - 1 && y === rows - 1)) {
+                        continue;
+                    }
+
+                    if (Math.random() < decorationProbability) {
+                        let decoration;
+                        const type = Math.random();
+                        const worldX = x * cellW;
+                        const worldZ = y * cellH;
+
+                        if (type < 0.25) {
+                            decoration = createCrate(cellSize * 0.3 * (0.8 + Math.random() * 0.4));
+                            decoration.position.set(worldX, decoration.geometry.parameters.height / 2 + 0.01, worldZ);
+                        } else if (type < 0.5) {
+                            decoration = createBarrel(cellSize * 0.4 * (0.8 + Math.random() * 0.4), cellSize * 0.15 * (0.8 + Math.random() * 0.4));
+                            decoration.position.set(worldX, decoration.geometry.parameters.height / 2 + 0.01, worldZ);
+                        } else if (type < 0.7) {
+                            decoration = createCrystal(cellSize * 0.2 * (0.7 + Math.random() * 0.6));
+                            decoration.position.set(worldX, decoration.geometry.parameters.radius * 0.8 + 0.01, worldZ);
+                            decoration.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+                        } else if (type < 0.9) {
+                            decoration = createRock(cellSize * 0.25 * (0.8 + Math.random() * 0.5));
+                            decoration.position.set(worldX, decoration.geometry.parameters.radius / 2 + 0.01, worldZ);
+                            decoration.rotation.y = Math.random() * Math.PI * 2;
+                        } else {
+                            decoration = createPipeSegment(cellSize * 0.5 * (0.8 + Math.random() * 0.4), cellSize * 0.05);
+                            decoration.position.set(worldX, decoration.geometry.parameters.radiusTop + 0.01, worldZ);
+                            if (Math.random() < 0.5) {
+                                decoration.rotation.z = Math.PI / 2;
+                            } else {
+                                decoration.rotation.x = Math.PI / 2;
+                            }
+                        }
+
+                        decoration.rotation.y = Math.random() * Math.PI * 2;
+
+                        decoration.position.x += (Math.random() - 0.5) * cellW * 0.1;
+                        decoration.position.z += (Math.random() - 0.5) * cellH * 0.1;
+
+
+                        decorationGroup.add(decoration);
+                    }
+                }
+            }
+            console.log("Added decorations:", decorationGroup.children.length);
+        }
+
+        function setupNewMaze() {
+            if (mazeWallsGroup) scene.remove(mazeWallsGroup);
+            obstacles = [];
+
+            mazeGrid = generateMaze(mazeWidth, mazeHeight);
+            mazeWallsGroup = createMazeGeometry(mazeGrid, cellSize, cellSize, wallHeight, wallThickness);
+            scene.add(mazeWallsGroup);
+
+            addDecorations(mazeGrid, cellSize, cellSize);
+
+            resetRobotPosition();
+            isMoving = true;
+            statusElement.textContent = "Navigating Maze...";
+            statusElement.style.color = "#4CAF50";
+            needsRotation = false;
+            needsDecision = true;
+            isWaitingForAPI = false;
+            lastAPIAction = null;
+            timeSinceLastAPICall = API_CALL_INTERVAL;
+
+            console.log("New maze generated. Obstacles:", obstacles.length);
+        }
+
+        function resetRobotPosition() {
+            const startX = 0;
+            const startZ = 0;
+            const lowestPointRelativeY = -1.25;
+
+            const desiredGroundClearance = 0.05;
+
+            const robotWorldY = desiredGroundClearance - lowestPointRelativeY;
+
+            robotGroup.position.set(startX, robotWorldY, startZ);
+
+            robotGroup.rotation.y = Math.PI / 2;
+            targetRotation = robotGroup.rotation.y;
+        }
+
+        function createBeautifulRobot() {
+            const group = new THREE.Group();
+            const shadowSetting = true;
+
+            const bodyMat = new THREE.MeshStandardMaterial({ color: 0x777799, metalness: 0.8, roughness: 0.3 });
+            const limbMat = new THREE.MeshStandardMaterial({ color: 0x555566, metalness: 0.7, roughness: 0.4 });
+            const jointMat = new THREE.MeshStandardMaterial({ color: 0xaaaaaa, metalness: 0.9, roughness: 0.2 });
+            const headMat = new THREE.MeshStandardMaterial({ color: 0x9999aa, metalness: 0.85, roughness: 0.3 });
+            const eyeMat = new THREE.MeshStandardMaterial({ color: 0xff4444, emissive: 0xaa0000, metalness: 0.5, roughness: 0.5 });
+            const antennaMat = new THREE.MeshStandardMaterial({ color: 0xcccccc, metalness: 1.0, roughness: 0.1 });
+            const detailMat = new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.6, roughness: 0.6 });
+
+            const bodyGeo = new THREE.BoxGeometry(3, 4, 2);
+            const body = new THREE.Mesh(bodyGeo, bodyMat);
+            body.position.y = 2;
+            body.castShadow = shadowSetting;
+            body.receiveShadow = shadowSetting;
+            group.add(body);
+
+            const headGeo = new THREE.SphereGeometry(1, 32, 16);
+            const head = new THREE.Mesh(headGeo, headMat);
+            head.position.y = 4.5;
+            head.castShadow = shadowSetting;
+            head.receiveShadow = shadowSetting;
+            group.add(head);
+
+            const eyeGeo = new THREE.CylinderGeometry(0.3, 0.3, 0.2, 16);
+            const eye = new THREE.Mesh(eyeGeo, eyeMat);
+            eye.position.y = 4.6;
+            eye.position.z = 0.9;
+            eye.rotation.x = Math.PI / 2;
+            eye.castShadow = shadowSetting;
+            group.add(eye);
+
+            const neckGeo = new THREE.CylinderGeometry(0.5, 0.5, 0.5, 16);
+            const neck = new THREE.Mesh(neckGeo, jointMat);
+            neck.position.y = 4.0;
+            neck.castShadow = shadowSetting;
+            neck.receiveShadow = shadowSetting;
+            group.add(neck);
+
+            const armGeo = new THREE.CylinderGeometry(0.4, 0.3, 3.5, 12);
+            const leftArm = new THREE.Mesh(armGeo, limbMat);
+            leftArm.position.set(-2, 2, 0);
+            leftArm.rotation.z = Math.PI / 12;
+            leftArm.castShadow = shadowSetting;
+            leftArm.receiveShadow = shadowSetting;
+            group.add(leftArm);
+
+            const rightArm = leftArm.clone();
+            rightArm.position.x = 2;
+            rightArm.rotation.z = -Math.PI / 12;
+            group.add(rightArm);
+
+            const shoulderGeo = new THREE.SphereGeometry(0.6, 16, 8);
+            const leftShoulder = new THREE.Mesh(shoulderGeo, jointMat);
+            leftShoulder.position.set(-1.6, 3.5, 0);
+            leftShoulder.castShadow = shadowSetting;
+            leftShoulder.receiveShadow = shadowSetting;
+            group.add(leftShoulder);
+
+            const rightShoulder = leftShoulder.clone();
+            rightShoulder.position.x = 1.6;
+            group.add(rightShoulder);
+
+            const legGeo = new THREE.BoxGeometry(1, 4, 1);
+            const leftLeg = new THREE.Mesh(legGeo, limbMat);
+            leftLeg.position.set(-1, -0.5, 0);
+            leftLeg.castShadow = shadowSetting;
+            leftLeg.receiveShadow = shadowSetting;
+            group.add(leftLeg);
+
+            const rightLeg = leftLeg.clone();
+            rightLeg.position.x = 1;
+            group.add(rightLeg);
+
+            const footGeo = new THREE.BoxGeometry(1.2, 0.5, 1.5);
+            const leftFoot = new THREE.Mesh(footGeo, detailMat);
+            leftFoot.position.set(-1, -2.75, 0.25);
+            leftFoot.castShadow = shadowSetting;
+            leftFoot.receiveShadow = shadowSetting;
+            group.add(leftFoot);
+
+            const rightFoot = leftFoot.clone();
+            rightFoot.position.x = 1;
+            group.add(rightFoot);
+
+            const antennaBaseGeo = new THREE.CylinderGeometry(0.1, 0.1, 0.5, 8);
+            const antennaBase = new THREE.Mesh(antennaBaseGeo, detailMat);
+            antennaBase.position.set(0.5, 5.0, -0.5);
+            antennaBase.castShadow = shadowSetting;
+            group.add(antennaBase);
+
+            const antennaPoleGeo = new THREE.CylinderGeometry(0.05, 0.05, 1.5, 8);
+            const antennaPole = new THREE.Mesh(antennaPoleGeo, antennaMat);
+            antennaPole.position.set(0.5, 5.25 + 0.75, -0.5);
+            antennaPole.castShadow = shadowSetting;
+            group.add(antennaPole);
+
+            const antennaTopGeo = new THREE.SphereGeometry(0.15, 8, 8);
+            const antennaTop = new THREE.Mesh(antennaTopGeo, eyeMat);
+            antennaTop.position.set(0.5, 6.0 + 0.15, -0.5);
+            antennaTop.castShadow = shadowSetting;
+            group.add(antennaTop);
+
+            const ventGeo = new THREE.BoxGeometry(2, 0.5, 0.1);
+            const frontVent = new THREE.Mesh(ventGeo, detailMat);
+            frontVent.position.set(0, 2.5, 1.05);
+            frontVent.castShadow = shadowSetting;
+            frontVent.receiveShadow = shadowSetting;
+            group.add(frontVent);
+
+            const backVent = frontVent.clone();
+            backVent.position.z = -1.05;
+            group.add(backVent);
+
+            return group;
+        }
+
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = clock.getDelta();
+            controls.update();
+            timeSinceLastAPICall += delta;
+
+            if (isMoving) {
+                updateNavigationSensors();
+
+                if (needsDecision && !isWaitingForAPI && timeSinceLastAPICall >= API_CALL_INTERVAL) {
+                    callAPIForDecision();
+                }
+
+                if (!needsRotation && lastAPIAction) {
+                    const actionToPerform = lastAPIAction;
+                    lastAPIAction = null;
+                    needsDecision = true;
+
+                    switch (actionToPerform) {
+                        case 'LEFT':
+                            initiateTurn(-Math.PI / 2);
+                            break;
+                        case 'RIGHT':
+                            initiateTurn(Math.PI / 2);
+                            break;
+                        case 'FORWARD':
+                            break;
+                        default:
+                            console.warn("Unknown API action:", actionToPerform, "Defaulting to LEFT turn.");
+                            initiateTurn(-Math.PI / 2);
+                    }
+                }
+
+                if (needsRotation) {
+                    const rotationDifference = normalizeAngle(targetRotation - robotGroup.rotation.y);
+                    const rotationStep = Math.sign(rotationDifference) * turnSpeed * delta;
+
+                    if (Math.abs(rotationDifference) <= Math.abs(rotationStep)) {
+                        robotGroup.rotation.y = targetRotation;
+                        needsRotation = false;
+                        needsDecision = true;
+                    } else {
+                        robotGroup.rotation.y += rotationStep;
+                        robotGroup.rotation.y = normalizeAngle(robotGroup.rotation.y);
+                    }
+                }
+
+                if (!needsRotation && frontSensorDist > collisionThreshold) {
+                    const moveDistance = moveSpeed * delta;
+                    const direction = new THREE.Vector3();
+                    robotGroup.getWorldDirection(direction);
+                    robotGroup.position.addScaledVector(direction, moveDistance);
+                } else if (!needsRotation && frontSensorDist <= collisionThreshold) {
+                    needsDecision = true;
+                }
+
+                const exitX = (mazeWidth - 1) * cellSize;
+                const exitZ = (mazeHeight - 1) * cellSize;
+                const exitThreshold = cellSize * 0.4;
+                if (Math.abs(robotGroup.position.x - exitX) < exitThreshold &&
+                    Math.abs(robotGroup.position.z - exitZ) < exitThreshold) {
+                    isMoving = false;
+                    statusElement.textContent = "Maze Solved!";
+                    statusElement.style.color = "#FFD700";
+                    apiStatusElement.textContent = "API: Task Complete";
+                }
+            }
+
+            debugInfoElement.textContent = `Sensors: F: ${frontSensorDist.toFixed(1)}, L: ${leftSensorDist.toFixed(1)}, R: ${rightSensorDist.toFixed(1)} | Action: ${lastAPIAction || (needsRotation ? 'Turning' : (isWaitingForAPI ? 'Waiting API' : (needsDecision ? 'Deciding...' : 'Moving')))}`;
+
+            const worldBounds = Math.max(mazeWidth, mazeHeight) * cellSize * 1.1;
+            if (Math.abs(robotGroup.position.x) > worldBounds || Math.abs(robotGroup.position.z) > worldBounds) {
+                console.warn("Robot escaped bounds! Resetting.");
+                setupNewMaze();
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        function updateNavigationSensors() {
+            const robotPos = robotGroup.position.clone();
+            const robotHeightOffset = robotGroup.scale.y * 2;
+            robotPos.y += robotHeightOffset;
+            const forwardOffset = robotGroup.scale.z * 0.5;
+            const directionVec = new THREE.Vector3();
+            robotGroup.getWorldDirection(directionVec);
+            robotPos.addScaledVector(directionVec, forwardOffset);
+
+
+            const forwardDir = new THREE.Vector3();
+            robotGroup.getWorldDirection(forwardDir);
+
+            const rightDir = new THREE.Vector3().crossVectors(robotGroup.up, forwardDir).normalize();
+            const leftDir = rightDir.clone().negate();
+
+            navigationRaycaster.set(robotPos, forwardDir);
+            navigationRaycaster.far = sensorDistance;
+            const frontIntersects = navigationRaycaster.intersectObjects(obstacles);
+            frontSensorDist = frontIntersects.length > 0 ? frontIntersects[0].distance : Infinity;
+
+            navigationRaycaster.set(robotPos, rightDir);
+            navigationRaycaster.far = sensorDistance;
+            const rightIntersects = navigationRaycaster.intersectObjects(obstacles);
+            rightSensorDist = rightIntersects.length > 0 ? rightIntersects[0].distance : Infinity;
+
+            navigationRaycaster.set(robotPos, leftDir);
+            navigationRaycaster.far = sensorDistance;
+            const leftIntersects = navigationRaycaster.intersectObjects(obstacles);
+            leftSensorDist = leftIntersects.length > 0 ? leftIntersects[0].distance : Infinity;
+        }
+
+        function initiateTurn(angleDelta) {
+            if (needsRotation) return;
+            targetRotation = normalizeAngle(robotGroup.rotation.y + angleDelta);
+            needsRotation = true;
+            needsDecision = false;
+            lastAPIAction = null;
+        }
+
+        function normalizeAngle(angle) {
+            while (angle <= -Math.PI) angle += Math.PI * 2;
+            while (angle > Math.PI) angle -= Math.PI * 2;
+            return angle;
+        }
+
+        async function callAPIForDecision() {
+            isWaitingForAPI = true;
+            needsDecision = false;
+            apiStatusElement.textContent = "API: Requesting...";
+            apiStatusElement.style.color = "#FFA500";
+
+            const fDistStr = frontSensorDist === Infinity ? "Infinity" : frontSensorDist.toFixed(1);
+            const lDistStr = leftSensorDist === Infinity ? "Infinity" : leftSensorDist.toFixed(1);
+            const rDistStr = rightSensorDist === Infinity ? "Infinity" : rightSensorDist.toFixed(1);
+            const clearThreshold = cellSize * 0.9;
+            const isFrontClear = frontSensorDist > clearThreshold;
+            const isLeftClear = leftSensorDist > clearThreshold;
+            const isRightClear = rightSensorDist > clearThreshold;
+
+            const API_URL = 'https://mrdenygrom.pythonanywhere.com/api/gemini';
+
+            const prompt = `You are the AI controller for a robot in a 3D maze simulation.
+Goal: Navigate the robot from the start (near 0,0) to the exit (near positive X and Z corner).
+Current Sensor Readings:
+- Distance to obstacle in Front (F): ${fDistStr} units.
+- Distance to obstacle on Left (L): ${lDistStr} units.
+- Distance to obstacle on Right (R): ${rDistStr} units.
+(A distance > ${clearThreshold.toFixed(1)} generally means the path is clear in that direction for at least one cell).
+
+Based ONLY on these sensor readings, decide the IMMEDIATE next action for the robot to eventually reach the exit.
+Your response MUST be a single word: FORWARD, LEFT, or RIGHT. Try to explore and avoid getting stuck in loops. Prioritize clear paths. If multiple paths are clear, maybe prioritize RIGHT or FORWARD. If only front is blocked, turn LEFT or RIGHT. If all are blocked, turn LEFT (or RIGHT).
+
+Example: If F=1.2, L=10.5, R=1.1, you should choose LEFT.
+Example: If F=10.0, L=1.0, R=12.0, you might choose FORWARD or RIGHT.
+
+Current readings: F=${fDistStr}, L=${lDistStr}, R=${rDistStr}.
+Is Front clear? ${isFrontClear}. Is Left clear? ${isLeftClear}. Is Right clear? ${isRightClear}.
+
+Your action (FORWARD, LEFT, or RIGHT):`;
+
+            const requestData = {
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: {
+                    temperature: 0.4,
+                    maxOutputTokens: 10,
+                    topP: 0.9,
+                }
+            };
+
+            try {
+                const response = await fetch(API_URL, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(requestData)
+                });
+
+                let data;
+                try {
+                    data = await response.json();
+                    console.log("Raw API Data:", JSON.stringify(data, null, 2));
+                } catch (jsonError) {
+                    console.error("Failed to parse API response as JSON:", jsonError);
+                    const textResponse = await response.text();
+                    console.error("Raw text response:", textResponse);
+                    throw new Error(`API request failed with status ${response.status} and non-JSON response.`);
+                }
+
+
+                if (!response.ok) {
+                    const errorMessage = data?.error?.message || `Status ${response.status}`;
+                    console.error("API HTTP Error:", errorMessage, "Full response:", data);
+                    throw new Error(`API request failed: ${errorMessage}`);
+                }
+
+                if (data.error) {
+                    console.error("API returned an error object:", data.error.message || JSON.stringify(data.error));
+                    throw new Error(`API Error: ${data.error.message || 'Unknown API error'}`);
+                }
+
+                if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
+                    const rawAnswer = data.candidates[0].content.parts[0].text.trim().toUpperCase();
+                    console.log("API Raw Response (candidates):", rawAnswer);
+
+                    if (rawAnswer.includes('FORWARD')) {
+                        lastAPIAction = 'FORWARD';
+                    } else if (rawAnswer.includes('LEFT')) {
+                        lastAPIAction = 'LEFT';
+                    } else if (rawAnswer.includes('RIGHT')) {
+                        lastAPIAction = 'RIGHT';
+                    } else {
+                        console.error("Invalid API response content (unexpected text):", rawAnswer);
+                        throw new Error(`Invalid API response format: ${rawAnswer.substring(0, 50)}...`);
+                    }
+
+                    console.log("API Decision:", lastAPIAction);
+                    apiStatusElement.textContent = `API: Received ${lastAPIAction}`;
+                    apiStatusElement.style.color = "#90EE90";
+                }
+                else if (data.candidates?.[0]?.finishReason && data.candidates[0].finishReason !== "STOP") {
+                    console.error("API request finished with non-STOP reason:", data.candidates[0].finishReason, "Full response:", data);
+                    throw new Error(`API Error: Finish reason ${data.candidates[0].finishReason}`);
+                }
+                else {
+                    console.error("API response structure is invalid (missing candidates/content/parts/text). Received:", JSON.stringify(data, null, 2));
+                    throw new Error("Invalid API response structure.");
+                }
+
+            } catch (error) {
+                console.error("API Call Failed:", error);
+                apiStatusElement.textContent = `API Error: ${error.message}`;
+                apiStatusElement.style.color = "#FF6347";
+
+                lastAPIAction = 'LEFT';
+                console.log("API failed, defaulting to LEFT turn.");
+            } finally {
+                isWaitingForAPI = false;
+                timeSinceLastAPICall = 0;
+            }
+        }
+
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        init();
+
+    </script>
+</body>
+
+</html>
